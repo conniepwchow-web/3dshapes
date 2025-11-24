@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 標題會根據遊戲變更 -->
+    <title>立體圖形遊戲</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Google Font (Noto Sans TC) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', 'Inter', sans-serif;
+        }
+
+        /* --- 遊戲 1 (猜猜看) 的樣式 --- */
+        .g1-option-btn.correct {
+            background-color: #22c55e; /* green-500 */
+            color: white;
+            border-color: #16a34a; /* green-700 */
+            transform: scale(1.05);
+        }
+        .g1-option-btn.incorrect {
+            background-color: #ef4444; /* red-500 */
+            color: white;
+            border-color: #b91c1c; /* red-700 */
+        }
+        .g1-option-btn.reveal {
+            background-color: #22c55e; /* green-500 */
+            color: white;
+            border-color: #16a34a; /* green-700 */
+            opacity: 1;
+        }
+        .g1-option-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        /* --- 遊戲 2 (配配看) 的樣式 --- */
+        .g2-shape-btn, .g2-selected-shape {
+            width: 80px;
+            height: 80px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .g2-shape-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .g2-shape-3d-svg {
+            width: 100%;
+            height: 180px;
+            stroke: #333;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill-opacity: 0.1;
+        }
+
+        .g2-modal {
+            display: none; /* 預設隱藏 */
+            position: fixed;
+            z-index: 50;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5); /* 半透明背景 */
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .g2-modal-content {
+            background-color: white;
+            padding: 24px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            max-width: 90%;
+            width: 320px;
+        }
+        
+        .g2-modal-show {
+            display: flex; /* 顯示 modal */
+        }
+
+        /* --- 通用返回按鈕 --- */
+        .back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background-color: #f3f4f6; /* gray-100 */
+            color: #374151; /* gray-700 */
+            padding: 8px 16px;
+            border-radius: 9999px; /* rounded-full */
+            font-size: 14px;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        .back-btn:hover {
+            background-color: #e5e7eb; /* gray-200 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <!-- 
+      =================================
+      開始畫面 (預設顯示)
+      =================================
+    -->
+    <main id="start-screen" class="bg-white w-full max-w-xl rounded-2xl shadow-xl p-8 sm:p-12 text-center">
+        <h1 class="text-4xl sm:text-5xl font-bold text-center text-blue-700 mb-10">
+            立體圖形遊戲
+        </h1>
+        <div class="flex flex-col gap-6">
+            <button id="play-guess-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-8 rounded-full text-xl shadow-lg transition transform hover:scale-105">
+                立體圖形猜猜看
+            </button>
+            <button id="play-match-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-8 rounded-full text-xl shadow-lg transition transform hover:scale-105">
+                立體圖形配配看
+            </button>
+        </div>
+    </main>
+
+    <!-- 
+      =================================
+      遊戲 1: 立體圖形猜猜看 (預設隱藏)
+      =================================
+    -->
+    <main id="game-guess-screen" class="hidden relative bg-white w-full max-w-2xl rounded-2xl shadow-xl p-6 sm:p-10">
+        
+        <button class="back-btn" data-target="start-screen">
+            &larr; 返回
+        </button>
+
+        <h1 class="text-3xl sm:text-4xl font-bold text-center text-blue-700 mb-6">
+            立體圖形猜猜看
+        </h1>
+
+        <!-- 進度顯示 -->
+        <div class="text-right text-gray-500 mb-4 font-semibold" id="g1-progress-text">
+            第 1 / 7 題
+        </div>
+
+        <!-- 題目區域 -->
+        <div id="g1-question-card" class="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 mb-6 min-h-[150px] flex items-center justify-center">
+            <p class="text-lg sm:text-xl text-gray-800 leading-relaxed" id="g1-question-description">
+                <!-- JavaScript 會在這裡載入問題 -->
+            </p>
+        </div>
+        
+        <!-- 選項區域 -->
+        <div id="g1-options-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <!-- JavaScript 會在這裡插入選項按鈕 -->
+        </div>
+
+        <!-- 反饋訊息 -->
+        <div id="g1-feedback-message" class="text-center text-xl font-bold h-8 mb-4">
+            <!-- JavaScript 會在這裡顯示答對/答錯 -->
+        </div>
+
+        <!-- 按鈕區域 -->
+        <div class="flex justify-center">
+            <button id="g1-next-btn" class="hidden bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-12 rounded-full text-lg shadow-md transition transform hover:scale-105">
+                下一題
+            </button>
+            <button id="g1-restart-btn" class="hidden bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-12 rounded-full text-lg shadow-md transition transform hover:scale-105">
+                重新開始
+            </button>
+        </div>
+    </main>
+
+    <!-- 
+      =================================
+      遊戲 2: 立體圖形配配看 (預設隱藏)
+      =================================
+    -->
+    <main id="game-match-screen" class="hidden relative bg-white w-full max-w-3xl rounded-2xl shadow-xl p-6 sm:p-10" style="background-color: #f9fafb;"> <!-- bg-blue-50 -->
+
+        <button class="back-btn" data-target="start-screen">
+            &larr; 返回
+        </button>
+        
+        <h1 class="text-3xl sm:text-4xl font-bold text-center text-blue-700 mb-6">
+            立體圖形配配看
+        </h1>
+
+        <!-- 題目區域 -->
+        <div id="g2-question-card" class="bg-gray-50 border-2 border-gray-200 rounded-xl p-6 mb-6 text-center">
+            <p class="text-lg sm:text-xl text-gray-700 mb-4">請點選下面所有的「<span id="g2-shape-name" class="font-bold text-2xl sm:text-3xl text-indigo-600"></span>」有的面：</p>
+            <!-- 3D 圖形顯示區 -->
+            <div id="g2-shape-visual" class="h-48 flex items-center justify-center">
+                <!-- JavaScript 會在這裡插入 3D 圖形的 SVG -->
+            </div>
+        </div>
+
+        <!-- 玩家選擇的答案區域 -->
+        <div class="mb-6">
+            <h2 class="font-bold text-gray-600 mb-2">你選擇的面：（點選可移除）</h2>
+            <div id="g2-selection-tray" class="bg-gray-100 rounded-lg min-h-[100px] p-4 flex flex-wrap gap-3 items-center border-2 border-dashed border-gray-300">
+                <!-- 玩家點選的 2D 圖形會出現在這裡 -->
+            </div>
+        </div>
+        
+        <!-- 2D 圖形選項區域 -->
+        <div class="mb-8">
+            <h2 class="font-bold text-gray-600 mb-3 text-center">點選圖形加入：</h2>
+            <div id="g2-shape-options" class="flex flex-wrap justify-center gap-4">
+                <!-- JavaScript 會在這裡插入 2D 圖形按鈕 -->
+            </div>
+        </div>
+
+        <!-- 按鈕區域 -->
+        <div class="flex flex-col sm:flex-row justify-center gap-4">
+            <button id="g2-clear-btn" class="w-full sm:w-auto bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-8 rounded-full text-lg shadow-md transition transform hover:scale-105">
+                全部清除
+            </button>
+            <button id="g2-check-btn" class="w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-full text-lg shadow-md transition transform hover:scale-105">
+                檢查答案
+            </button>
+            <button id="g2-next-btn" class="w-full sm:w-auto bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-full text-lg shadow-md transition transform hover:scale-105 hidden">
+                下一題
+            </button>
+        </div>
+    </main>
+
+    <!-- 彈窗 Modal (用於遊戲 2) -->
+    <div id="g2-feedback-modal" class="g2-modal">
+        <div class="g2-modal-content">
+            <div id="g2-modal-icon" class="text-6xl mb-4"></div>
+            <h2 id="g2-modal-title" class="text-2xl font-bold mb-3"></h2>
+            <p id="g2-modal-message" class="text-gray-700 mb-6"></p>
+            <button id="g2-modal-close-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-full text-lg">
+                知道了
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 
+        // =================================
+        // 遊戲 1: 立體圖形猜猜看 (邏輯)
+        // =================================
+        //
+        const GameGuess = {
+            // --- 資料庫 ---
+            shapesSVG: {
+                "三角柱": `<svg class="w-20 h-20" viewBox="0 0 200 150" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill-opacity="0.1">
+                            <polygon points="50,30 130,30 90,60" fill="#f87171" />
+                            <polygon points="50,100 130,100 90,130" fill="#f87171" style="fill-opacity: 0.3;" />
+                            <path d="M50,30 L50,100" />
+                            <path d="M130,30 L130,100" />
+                            <path d="M90,60 L90,130" />
+                            <polygon points="50,30 130,30 130,100 50,100" fill="#34d399" />
+                            <polygon points="130,30 90,60 90,130 130,100" fill="#34d399" />
+                            <polygon points="50,30 90,60 90,130 50,100" fill="#34d399" style="fill-opacity: 0.3;" />
+                            <path d="M50,100 L90,130 L130,100" stroke-dasharray="4 4" fill="none" />
+                        </svg>`,
+                "三角錐": `<svg class="w-20 h-20" viewBox="0 0 200 150" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill-opacity="0.1">
+                            <polygon points="50,130 150,130 100,100" fill="#f87171" style="fill-opacity: 0.3;" />
+                            <path d="M100,30 L50,130" />
+                            <path d="M100,30 L150,130" />
+                            <path d="M100,30 L100,100" stroke-dasharray="4 4" />
+                            <polygon points="100,30 50,130 150,130" fill="#f87171" />
+                            <polygon points="100,30 150,130 100,100" fill="#f87171" />
+                            <polygon points="100,30 50,130 100,100" fill="#f87171" style="fill-opacity: 0.3;" />
+                            <path d="M50,130 L100,100 L150,130" stroke-dasharray="4 4" fill="none" />
+                        </svg>`,
+                "四角柱": `<svg class="w-20 h-20" viewBox="0 0 200 150" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill-opacity="0.1">
+                            <rect x="50" y="30" width="100" height="90" fill="#34d399" />
+                            <rect x="70" y="50" width="100" height="90" fill="#34d399" style="fill-opacity: 0.2;" stroke-dasharray="5 5" />
+                            <path d="M50,30 L70,50 M150,30 L170,50 M50,120 L70,140 M150,120 L170,140" />
+                            <rect x="70" y="50" width="100" height="90" stroke="none" fill="#34d399" />
+                        </svg>`,
+                "四角錐": `<svg class="w-20 h-20" viewBox="0 0 200 150" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill-opacity="0.1">
+                            <polygon points="50,120 150,120 130,100 70,100" fill="#34d399" />
+                            <path d="M100,30 L50,120 L150,120 Z" fill="#f87171" />
+                            <path d="M100,30 L70,100" stroke-dasharray="4 4" />
+                            <path d="M100,30 L130,100" />
+                        </svg>`,
+                "五角柱": `<svg class="w-20 h-20" viewBox="0 0 200 150" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill-opacity="0.1">
+                            <polygon points="50,50 100,20 150,50 130,100 70,100" fill="#60a5fa" />
+                            <polygon points="50,80 100,50 150,80 130,130 70,130" fill="#60a5fa" stroke-dasharray="4 4" style="fill-opacity: 0.2;" />
+                            <path d="M50,50 L50,80 M100,20 L100,50 M150,50 L150,80 M130,100 L130,130 M70,100 L70,130" />
+                            <polygon points="50,80 100,50 150,80 130,130 70,130" stroke="none" fill="#60a5fa" />
+                        </svg>`,
+                "五角錐": `<svg class="w-20 h-20" viewBox="0 0 200 150" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill-opacity="0.1">
+                            <polygon points="50,110 100,80 150,110 130,140 70,140" fill="#60a5fa" />
+                            <path d="M100,30 L50,110 L70,140 Z" fill="#f87171" />
+                            <path d="M100,30 L100,80" stroke-dasharray="4 4" />
+                            <path d="M100,30 L150,110 L130,140 Z" fill="#f87171" />
+                        </svg>`,
+                "六角柱": `<svg class="w-20 h-20" viewBox="0 0 200 150" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill-opacity="0.1">
+                            <polygon points="75,20 125,20 150,50 125,80 75,80 50,50" fill="#facc15" />
+                            <polygon points="75,50 125,50 150,80 125,110 75,110 50,80" fill="#facc15" stroke-dasharray="4 4" style="fill-opacity: 0.2;" />
+                            <path d="M75,20 L75,50 M125,20 L125,50 M150,50 L150,80 M125,80 L125,110 M75,80 L75,110 M50,50 L50,80" />
+                            <polygon points="75,50 125,50 150,80 125,110 75,110 50,80" stroke="none" fill="#facc15" />
+                        </svg>`,
+                "六角錐": `<svg class="w-20 h-20" viewBox="0 0 200 150" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill-opacity="0.1">
+                            <polygon points="75,80 125,80 150,110 125,140 75,140 50,110" fill="#facc15" />
+                            <path d="M100,30 L75,80 L50,110 Z" fill="#f87171" />
+                            <path d="M100,30 L75,140" stroke-dasharray="4 4" />
+                            <path d="M100,30 L125,140" stroke-dasharray="4 4" />
+                            <path d="M100,30 L150,110 L125,80 Z" fill="#f87171" />
+                        </svg>`,
+                "圓柱": `<svg class="w-20 h-20" viewBox="0 0 200 150" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill-opacity="0.1">
+                            <ellipse cx="100" cy="40" rx="50" ry="20" fill="#60a5fa" />
+                            <path d="M50 40 L50 110" />
+                            <path d="M150 40 L150 110" />
+                            <path d="M50 40 L50 110 A50 20 0 0 0 150 110 L150 40" fill="#a5b4fc" style="fill-opacity: 0.5;" />
+                            <ellipse cx="100" cy="110" rx="50" ry="20" fill="#60a5fa" style="fill-opacity: 0.2;" />
+                            <path d="M50,110 A50,20 0 0,1 150,110" fill="none" />
+                        </svg>`,
+                "圓錐": `<svg class="w-20 h-20" viewBox="0 0 200 150" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill-opacity="0.1">
+                            <path d="M50,110 L100,30 L150,110" fill="#fca5a5" />
+                            <ellipse cx="100" cy="110" rx="50" ry="20" fill="#f87171" style="fill-opacity: 0.2;" />
+                            <path d="M50,110 A50,20 0 0,1 150,110" fill="none" />
+                        </svg>`,
+                "球體": `<svg class="w-20 h-20" viewBox="0 0 200 150" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill-opacity="0.1">
+                            <circle cx="100" cy="75" r="60" fill="#34d399" />
+                            <ellipse cx="100" cy="75" rx="25" ry="60" fill="none" stroke-dasharray="4 4" style="stroke-opacity: 0.7;" />
+                            <ellipse cx="100" cy="75" rx="55" ry="20" fill="none" stroke-dasharray="4 4" style="stroke-opacity: 0.7;" />
+                        </svg>`,
+                "角錐": `<svg class="w-20 h-20" viewBox="0 0 200 150" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill-opacity="0.1">
+                            <polygon points="50,130 150,130 100,100" fill="#f87171" style="fill-opacity: 0.3;" />
+                            <path d="M100,30 L50,130" />
+                            <path d="M100,30 L150,130" />
+                            <path d="M100,30 L100,100" stroke-dasharray="4 4" />
+                            <polygon points="100,30 50,130 150,130" fill="#f87171" />
+                            <polygon points="100,30 150,130 100,100" fill="#f87171" />
+                            <polygon points="100,30 50,130 100,100" fill="#f87171" style="fill-opacity: 0.3;" />
+                            <path d="M50,130 L100,100 L150,130" stroke-dasharray="4 4" fill="none" />
+                        </svg>`,
+                "placeholder": `<svg class="w-20 h-20" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round">
+                            <path d="M20 20 L80 80 M20 80 L80 20" />
+                        </svg>`
+            },
+            questions: [
+                { description: "我總共有5個面。<br>我的兩個底是三角形，另外3個側面是長方形。<br>請問我是誰？", options: ["三角柱", "三角錐", "四角柱", "圓柱"], answer: "三角柱" },
+                { description: "我也有5個面。<br>但我只有1個底，它是四邊形。<br>我的4個側面都是三角形，而且它們的頂點會集中在同一點。", options: ["四角柱", "三角錐", "四角錐", "五角柱"], answer: "四角錐" },
+                { description: "我有7個面。<br>我的兩個底是五邊形。<br>我的5個側面都是長方形。<br>請問我是誰？", options: ["五角錐", "六角柱", "圓柱", "五角柱"], answer: "五角柱" },
+                { description: "我有兩個平坦的底，它們都是圓形的。<br>我還有一個側面，但它是彎曲的（曲面）。", options: ["圓錐", "球體", "圓柱", "三角柱"], answer: "圓柱" },
+                { description: "我只有一個平坦的底，是圓形的。<br>我還有一個曲面，它會連到一個尖尖的頂點。", options: ["圓錐", "三角錐", "圓柱", "四角錐"], answer: "圓錐" },
+                { description: "我沒有任何平坦的面。<br>我整個身體都是由一個曲面組成的。<br>請問我是誰？", options: ["圓柱", "圓錐", "球體", "角錐"], answer: "球體" },
+                { description: "我有8個面。<br>我的兩個底是六邊形。<br>我的6個側面都是長方形。", options: ["六角錐", "五角柱", "六角柱", "四角柱"], answer: "六角柱" }
+            ],
+
+            // --- 遊戲狀態變數 ---
+            currentQuestionIndex: 0,
+            isAnswered: false,
+            
+            // --- DOM 元素 (會
+            questionDescription: null,
+            progressText: null,
+            optionsGrid: null,
+            feedbackMessage: null,
+            nextBtn: null,
+            restartBtn: null,
+
+            /** 初始化遊戲 */
+            init: function() {
+                document.title = "立體圖形猜猜看"; // 設定頁面標題
+                
+                // 獲取 DOM 元素
+                this.questionDescription = document.getElementById('g1-question-description');
+                this.progressText = document.getElementById('g1-progress-text');
+                this.optionsGrid = document.getElementById('g1-options-grid');
+                this.feedbackMessage = document.getElementById('g1-feedback-message');
+                this.nextBtn = document.getElementById('g1-next-btn');
+                this.restartBtn = document.getElementById('g1-restart-btn');
+
+                // 綁定事件
+                this.nextBtn.onclick = () => {
+                    this.currentQuestionIndex++;
+                    this.loadQuestion(this.currentQuestionIndex);
+                };
+                this.restartBtn.onclick = () => this.init(); // 重新綁定
+                
+                // 開始
+                this.currentQuestionIndex = 0;
+                this.isAnswered = false;
+                this.nextBtn.classList.add('hidden');
+                this.restartBtn.classList.add('hidden');
+                this.loadQuestion(this.currentQuestionIndex);
+            },
+
+            /** 載入題目 */
+            loadQuestion: function(index) {
+                if (index >= this.questions.length) {
+                    this.showEndScreen();
+                    return;
+                }
+
+                const question = this.questions[index];
+                
+                this.questionDescription.innerHTML = question.description;
+                this.progressText.textContent = `第 ${index + 1} / ${this.questions.length} 題`;
+                
+                this.optionsGrid.innerHTML = '';
+                this.feedbackMessage.textContent = '';
+                this.isAnswered = false;
+                this.nextBtn.classList.add('hidden');
+
+                question.options.forEach(optionName => {
+                    const btn = document.createElement('button');
+                    btn.className = "g1-option-btn flex flex-col items-center justify-center gap-2 bg-white border-2 border-gray-300 rounded-lg p-4 transition duration-200 ease-in-out hover:bg-gray-50 hover:border-blue-400";
+                    
+                    const svgIcon = this.shapesSVG[optionName] || this.shapesSVG['placeholder'];
+                    
+                    btn.innerHTML = `
+                        ${svgIcon}
+                        <span class="font-semibold text-gray-700">${optionName}</span>
+                    `;
+                    btn.dataset.answer = optionName;
+                    
+                    btn.onclick = (e) => this.handleOptionClick(e);
+                    this.optionsGrid.appendChild(btn);
+                });
+            },
+
+            /** 處理選項點選事件 */
+            handleOptionClick: function(event) {
+                if (this.isAnswered) return;
+                this.isAnswered = true;
+
+                const selectedBtn = event.currentTarget;
+                const selectedAnswer = selectedBtn.dataset.answer;
+                const correctAnswer = this.questions[this.currentQuestionIndex].answer;
+
+                const allButtons = this.optionsGrid.querySelectorAll('.g1-option-btn');
+                allButtons.forEach(btn => {
+                    btn.disabled = true;
+                    if (btn.dataset.answer === correctAnswer) {
+                        btn.classList.add('reveal');
+                    }
+                });
+
+                if (selectedAnswer === correctAnswer) {
+                    this.feedbackMessage.textContent = '答對了！🎉';
+                    this.feedbackMessage.className = "text-center text-xl font-bold h-8 mb-4 text-green-500";
+                    selectedBtn.classList.add('correct');
+                } else {
+                    this.feedbackMessage.textContent = `答錯了... 正確答案是 ${correctAnswer}`;
+                    this.feedbackMessage.className = "text-center text-xl font-bold h-8 mb-4 text-red-500";
+                    selectedBtn.classList.add('incorrect');
+                }
+
+                if (this.currentQuestionIndex < this.questions.length - 1) {
+                    this.nextBtn.classList.remove('hidden');
+                } else {
+                    this.restartBtn.classList.remove('hidden');
+                }
+            },
+
+            /** 顯示遊戲結束畫面 */
+            showEndScreen: function() {
+                this.questionDescription.innerHTML = "恭喜你完成了所有題目！";
+                this.progressText.textContent = `已完成 ${this.questions.length} / ${this.questions.length} 題`;
+                this.optionsGrid.innerHTML = '';
+                this.feedbackMessage.textContent = '👍';
+                this.nextBtn.classList.add('hidden');
+                this.restartBtn.classList.remove('hidden');
+            }
+        };
+
+        // 
+        // =================================
+        // 遊戲 2: 立體圖形配配看 (邏輯)
+        // =================================
+        //
+        const GameMatch = {
+            // --- 資料庫 ---
+            shapeDatabase: [
+                { id: 'tri_prism', name: '三角柱', faces: { triangle: 2, quadrilateral: 3, pentagon: 0, hexagon: 0 } },
+                { id: 'quad_prism', name: '四角柱', faces: { triangle: 0, quadrilateral: 6, pentagon: 0, hexagon: 0 } },
+                { id: 'penta_prism', name: '五角柱', faces: { triangle: 0, quadrilateral: 5, pentagon: 2, hexagon: 0 } },
+                { id: 'hexa_prism', name: '六角柱', faces: { triangle: 0, quadrilateral: 6, pentagon: 0, hexagon: 2 } },
+                { id: 'tri_pyramid', name: '三角錐', faces: { triangle: 4, quadrilateral: 0, pentagon: 0, hexagon: 0 } },
+                { id: 'quad_pyramid', name: '四角錐', faces: { triangle: 4, quadrilateral: 1, pentagon: 0, hexagon: 0 } },
+                { id: 'penta_pyramid', name: '五角錐', faces: { triangle: 5, quadrilateral: 0, pentagon: 1, hexagon: 0 } },
+                { id: 'hexa_pyramid', name: '六角錐', faces: { triangle: 6, quadrilateral: 0, pentagon: 0, hexagon: 1 } },
+            ],
+            shapeOptions: [
+                { id: 'triangle', name: '三角形', svg: '<svg class="g2-shape-btn" viewBox="0 0 100 100"><polygon points="50,15 90,85 10,85" fill="#f87171" stroke="#c81e1e" stroke-width="3"/></svg>' },
+                { id: 'quadrilateral', name: '四角形', svg: '<svg class="g2-shape-btn" viewBox="0 0 100 100"><rect x="15" y="15" width="70" height="70" fill="#34d399" stroke="#059669" stroke-width="3" rx="5"/></svg>' },
+                { id: 'pentagon', name: '五角形', svg: '<svg class="g2-shape-btn" viewBox="0 0 100 100"><polygon points="50,10 95,40 80,90 20,90 5,40" fill="#60a5fa" stroke="#2563eb" stroke-width="3"/></svg>' },
+                { id: 'hexagon', name: '六角形', svg: '<svg class="g2-shape-btn" viewBox="0 0 100 100"><polygon points="50,10 90,30 90,70 50,90 10,70 10,30" fill="#facc15" stroke="#d97706" stroke-width="3"/></svg>' },
+            ],
+            shape3DVisuals: {
+                'tri_prism': `<svg class="g2-shape-3d-svg" viewBox="0 0 200 150">
+                    <polygon points="80, 50 80, 120 130, 85" fill="#f87171" style="fill-opacity: 0.2;" stroke="#c81e1e" stroke-dasharray="4 4" />
+                    <polygon points="50, 30 50, 100 100, 65" fill="#f87171" stroke="#c81e1e" />
+                    <polygon points="50, 100 80, 120 130, 85 100, 65" fill="#34d399" />
+                    <polygon points="50, 30 80, 50 130, 85 100, 65" fill="#34d399" />
+                    <polygon points="50, 30 50, 100 80, 120 80, 50" fill="#34d399" />
+                    <path d="M50, 30 L80, 50" /><path d="M50, 100 L80, 120" /><path d="M100, 65 L130, 85" />
+                </svg>`,
+                'quad_prism': `<svg class="g2-shape-3d-svg" viewBox="0 0 200 150">
+                    <rect x="50" y="30" width="100" height="90" fill="#34d399" />
+                    <rect x="70" y="50" width="100" height="90" fill="#34d399" style="fill-opacity: 0.2;" stroke-dasharray="5 5" />
+                    <path d="M50,30 L70,50 M150,30 L170,50 M50,120 L70,140 M150,120 L170,140" />
+                    <rect x="70" y="50" width="100" height="90" stroke="none" fill="#34d399" />
+                </svg>`,
+                'penta_prism': `<svg class="g2-shape-3d-svg" viewBox="0 0 200 150">
+                    <polygon points="50,50 100,20 150,50 130,100 70,100" fill="#60a5fa" />
+                    <polygon points="50,80 100,50 150,80 130,130 70,130" fill="#60a5fa" stroke-dasharray="4 4" style="fill-opacity: 0.2;" />
+                    <path d="M50,50 L50,80 M100,20 L100,50 M150,50 L150,80 M130,100 L130,130 M70,100 L70,130" />
+                    <polygon points="50,80 100,50 150,80 130,130 70,130" stroke="none" fill="#60a5fa" />
+                </svg>`,
+                'hexa_prism': `<svg class="g2-shape-3d-svg" viewBox="0 0 200 150">
+                    <polygon points="75,20 125,20 150,50 125,80 75,80 50,50" fill="#facc15" />
+                    <polygon points="75,50 125,50 150,80 125,110 75,110 50,80" fill="#facc15" stroke-dasharray="4 4" style="fill-opacity: 0.2;" />
+                    <path d="M75,20 L75,50 M125,20 L125,50 M150,50 L150,80 M125,80 L125,110 M75,80 L75,110 M50,50 L50,80" />
+                    <polygon points="75,50 125,50 150,80 125,110 75,110 50,80" stroke="none" fill="#facc15" />
+                </svg>`,
+                'tri_pyramid': `<svg class="g2-shape-3d-svg" viewBox="0 0 200 150">
+                    <polygon points="50, 130 150, 130 100, 100" fill="#f87171" style="fill-opacity: 0.2;" />
+                    <line x1="50" y1="130" x2="150" y2="130" stroke="#c81e1e" />
+                    <line x1="50" y1="130" x2="100" y2="100" stroke="#c81e1e" stroke-dasharray="4 4" />
+                    <line x1="150" y1="130" x2="100" y2="100" stroke="#c81e1e" stroke-dasharray="4 4" />
+                    <polygon points="100,30 50,130 150,130" fill="#f87171" />
+                    <polygon points="100,30 50,130 100,100" fill="#f87171" style="fill-opacity: 0.1;" />
+                    <polygon points="100,30 150,130 100,100" fill="#f87171" style="fill-opacity: 0.1;" />
+                    <path d="M100,30 L50,130" /><path d="M100,30 L150,130" /><path d="M100,30 L100,100" stroke-dasharray="4 4" />
+                </svg>`,
+                'quad_pyramid': `<svg class="g2-shape-3d-svg" viewBox="0 0 200 150">
+                    <polygon points="50,120 150,120 130,100 70,100" fill="#34d399" />
+                    <path d="M100,30 L50,120 L150,120 Z" fill="#f87171" />
+                    <path d="M100,30 L70,100" stroke-dasharray="4 4" />
+                    <path d="M100,30 L130,100" />
+                </svg>`,
+                'penta_pyramid': `<svg class="g2-shape-3d-svg" viewBox="0 0 200 150">
+                    <polygon points="50,110 100,80 150,110 130,140 70,140" fill="#60a5fa" />
+                    <path d="M100,30 L50,110 L70,140 Z" fill="#f87171" />
+                    <path d="M100,30 L100,80" stroke-dasharray="4 4" />
+                    <path d="M100,30 L150,110 L130,140 Z" fill="#f87171" />
+                </svg>`,
+                'hexa_pyramid': `<svg class="g2-shape-3d-svg" viewBox="0 0 200 150">
+                    <polygon points="75,80 125,80 150,110 125,140 75,140 50,110" fill="#facc15" />
+                    <path d="M100,30 L75,80 L50,110 Z" fill="#f87171" />
+                    <path d="M100,30 L75,140" stroke-dasharray="4 4" />
+                    <path d="M100,30 L125,140" stroke-dasharray="4 4" />
+                    <path d="M100,30 L150,110 L125,80 Z" fill="#f87171" />
+                </svg>`,
+            },
+
+            // --- 遊戲狀態變數 ---
+            currentShape: null,
+            playerSelection: { triangle: 0, quadrilateral: 0, pentagon: 0, hexagon: 0 },
+
+            // --- DOM 元素 ---
+            shapeNameEl: null,
+            shapeVisualEl: null,
+            selectionTrayEl: null,
+            shapeOptionsEl: null,
+            checkBtn: null,
+            clearBtn: null,
+            nextBtn: null,
+            modal: null,
+            modalIcon: null,
+            modalTitle: null,
+            modalMessage: null,
+            modalCloseBtn: null,
+
+            /** 初始化遊戲 */
+            init: function() {
+                document.title = "立體圖形配配看"; // 設定頁面標題
+
+                // 獲取 DOM 元素
+                this.shapeNameEl = document.getElementById('g2-shape-name');
+                this.shapeVisualEl = document.getElementById('g2-shape-visual');
+                this.selectionTrayEl = document.getElementById('g2-selection-tray');
+                this.shapeOptionsEl = document.getElementById('g2-shape-options');
+                this.checkBtn = document.getElementById('g2-check-btn');
+                this.clearBtn = document.getElementById('g2-clear-btn');
+                this.nextBtn = document.getElementById('g2-next-btn');
+                this.modal = document.getElementById('g2-feedback-modal');
+                this.modalIcon = document.getElementById('g2-modal-icon');
+                this.modalTitle = document.getElementById('g2-modal-title');
+                this.modalMessage = document.getElementById('g2-modal-message');
+                this.modalCloseBtn = document.getElementById('g2-modal-close-btn');
+
+                // 渲染 2D 圖形選項按鈕
+                this.shapeOptionsEl.innerHTML = '';
+                this.shapeOptions.forEach(option => {
+                    const btn = document.createElement('button');
+                    btn.innerHTML = option.svg;
+                    btn.setAttribute('aria-label', `加入${option.name}`);
+                    btn.dataset.shapeId = option.id;
+                    btn.className = "g2-shape-btn-container transition transform hover:scale-110";
+                    this.shapeOptionsEl.appendChild(btn);
+                });
+
+                // 綁定事件監聽 (使用 .onclick 確保每次 init 都綁定正確的 'this')
+                this.shapeOptionsEl.onclick = (e) => this.handleShapeClick(e);
+                this.selectionTrayEl.onclick = (e) => this.handleTrayClick(e);
+                this.clearBtn.onclick = () => this.handleClearClick();
+                this.checkBtn.onclick = () => this.handleCheckClick();
+                this.nextBtn.onclick = () => this.loadNewQuestion();
+                this.modalCloseBtn.onclick = () => this.hideFeedback();
+
+                // 載入第一個問題
+                this.loadNewQuestion();
+            },
+
+            /** 載入新題目 */
+            loadNewQuestion: function() {
+                this.currentShape = this.shapeDatabase[Math.floor(Math.random() * this.shapeDatabase.length)];
+                this.handleClearClick();
+                this.shapeNameEl.textContent = this.currentShape.name;
+                this.shapeVisualEl.innerHTML = this.shape3DVisuals[this.currentShape.id] || '<p class="text-gray-500">圖形載入中...</p>';
+                this.checkBtn.classList.remove('hidden');
+                this.clearBtn.classList.remove('hidden');
+                this.nextBtn.classList.add('hidden');
+                this.hideFeedback();
+            },
+
+            /** 處理 2D 圖形點選事件 (加入選擇) */
+            handleShapeClick: function(event) {
+                const btn = event.target.closest('.g2-shape-btn-container');
+                if (!btn) return;
+                const shapeId = btn.dataset.shapeId;
+                this.playerSelection[shapeId]++;
+                const shapeData = this.shapeOptions.find(opt => opt.id === shapeId);
+                if (shapeData) {
+                    const shapeDiv = document.createElement('div');
+                    shapeDiv.innerHTML = shapeData.svg;
+                    shapeDiv.className = 'g2-selected-shape-container relative transition transform hover:scale-110';
+                    shapeDiv.dataset.shapeId = shapeId;
+                    shapeDiv.setAttribute('title', `點選移除${shapeData.name}`);
+                    shapeDiv.firstElementChild.classList.add('g2-selected-shape');
+                    this.selectionTrayEl.appendChild(shapeDiv);
+                }
+            },
+
+            /** 處理選擇區點選事件 (移除選擇) */
+            handleTrayClick: function(event) {
+                const shapeEl = event.target.closest('.g2-selected-shape-container');
+                if (!shapeEl) return;
+                const shapeId = shapeEl.dataset.shapeId;
+                if (this.playerSelection[shapeId] > 0) {
+                    this.playerSelection[shapeId]--;
+                }
+                shapeEl.remove();
+            },
+
+            /** 處理清除按鈕事件 */
+            handleClearClick: function() {
+                this.playerSelection = { triangle: 0, quadrilateral: 0, pentagon: 0, hexagon: 0 };
+                this.selectionTrayEl.innerHTML = '';
+            },
+
+            /** 處理檢查答案按鈕事件 */
+            handleCheckClick: function() {
+                let isCorrect = true;
+                const answer = this.currentShape.faces;
+                for (const key in answer) {
+                    if (this.playerSelection[key] !== answer[key]) {
+                        isCorrect = false;
+                        break;
+                    }
+                }
+                for (const key in this.playerSelection) {
+                    if (this.playerSelection[key] > 0 && answer[key] === 0) {
+                        isCorrect = false;
+                        break;
+                    }
+                }
+                this.showFeedback(isCorrect);
+            },
+
+            /** 顯示回饋 Modal */
+            showFeedback: function(isCorrect) {
+                if (isCorrect) {
+                    this.modalIcon.textContent = '🎉';
+                    this.modalTitle.textContent = '太棒了！';
+                    this.modalMessage.textContent = `你答對了！ ${this.currentShape.name} 真的有這些面喔！`;
+                    this.modalCloseBtn.textContent = '下一題';
+                    this.modalCloseBtn.onclick = () => this.loadNewQuestion();
+                    this.checkBtn.classList.add('hidden');
+                    this.clearBtn.classList.add('hidden');
+                    this.nextBtn.classList.remove('hidden');
+                } else {
+                    this.modalIcon.textContent = '🤔';
+                    this.modalTitle.textContent = '差一點點！';
+                    this.modalMessage.textContent = '面的種類或數量不對喔，請再試一次！';
+                    this.modalCloseBtn.textContent = '知道了';
+                    this.modalCloseBtn.onclick = () => this.hideFeedback();
+                }
+                this.modal.classList.add('g2-modal-show');
+            },
+
+            /** 隱藏回饋 Modal */
+            hideFeedback: function() {
+                this.modal.classList.remove('g2-modal-show');
+            }
+        };
+
+        // 
+        // =================================
+        // 頁面導航 (Navigation) 邏輯
+        // =================================
+        //
+        document.addEventListener('DOMContentLoaded', () => {
+            // 獲取所有畫面
+            const screens = {
+                'start-screen': document.getElementById('start-screen'),
+                'game-guess-screen': document.getElementById('game-guess-screen'),
+                'game-match-screen': document.getElementById('game-match-screen')
+            };
+            const gameMatchModal = document.getElementById('g2-feedback-modal');
+
+            // 獲取觸發按鈕
+            const playGuessBtn = document.getElementById('play-guess-btn');
+            const playMatchBtn = document.getElementById('play-match-btn');
+            const backBtns = document.querySelectorAll('.back-btn');
+
+            // 顯示特定畫面的函式
+            const showScreen = (screenId) => {
+                // 隱藏所有畫面
+                for (const id in screens) {
+                    screens[id].classList.add('hidden');
+                }
+                // 隱藏 modal
+                gameMatchModal.classList.remove('g2-modal-show');
+
+                // 顯示目標畫面
+                if (screens[screenId]) {
+                    screens[screenId].classList.remove('hidden');
+                }
+
+                // 如果是遊戲畫面，初始化它
+                if (screenId === 'game-guess-screen') {
+                    GameGuess.init();
+                } else if (screenId === 'game-match-screen') {
+                    GameMatch.init();
+                } else {
+                    document.title = "立體圖形遊戲"; // 重設標題
+                }
+            };
+
+            // 綁定開始遊戲按鈕
+            playGuessBtn.addEventListener('click', () => showScreen('game-guess-screen'));
+            playMatchBtn.addEventListener('click', () => showScreen('game-match-screen'));
+
+            // 綁定所有返回按鈕
+            backBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => showScreen(e.target.dataset.target));
+            });
+
+            // 預設顯示開始畫面
+            showScreen('start-screen');
+        });
+
+    </script>
+</body>
+</html>
+
+
